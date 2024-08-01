@@ -176,6 +176,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			camera_azims=None,
 			camera_centers=None,
 			top_cameras=True,
+            bottom_cameras=True,
 			ref_views=[],
 			latent_size=None,
 			render_rgb_size=None,
@@ -227,6 +228,19 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			self.attention_mask.append([front_view_idx, cam_count])
 			self.attention_mask.append([back_view_idx, cam_count+1])
 
+		if bottom_cameras:
+			self.camera_poses.append((-30, 0))
+			self.camera_poses.append((-30, 180))
+
+			self.attention_mask.append([front_view_idx, cam_count + 1])
+			self.attention_mask.append([back_view_idx, cam_count + 1])
+
+			self.camera_poses.append((-30, 90))
+			self.camera_poses.append((-30, 270))
+
+			self.attention_mask.append([front_view_idx, cam_count + 1])
+			self.attention_mask.append([back_view_idx, cam_count + 1])
+
 		# Reference view for attention (all views attend the the views in this list)
 		# A forward view will be used if not specified
 		if len(ref_views) == 0:
@@ -274,9 +288,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		print("Done Initialization")
 
-
-
-
 	'''
 		Modified from a StableDiffusion ControlNet pipeline
 		Multi ControlNet not supported yet
@@ -313,6 +324,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		camera_azims=None,
 		camera_centers=None,
 		top_cameras=True,
+		bottom_cameras=True,
 		texture_size = 1536,
 		render_rgb_size=1024,
 		texture_rgb_size = 1024,
