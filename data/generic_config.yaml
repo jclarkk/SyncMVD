@@ -1,0 +1,9 @@
+mesh_config_relative: False
+use_mesh_name: False
+steps: 30
+cond_type: "depth"
+seed: 555
+log_interval: 10
+mesh_scale: 1
+tex_fast_preview: False
+view_fast_preview: False
