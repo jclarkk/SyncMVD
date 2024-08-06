@@ -5,6 +5,6 @@ transformers==4.36.0
 xformers==0.0.20
 xatlas
 accelerate
-cupy-cuda11x==12.2.0
+#cupy-cuda11x==12.2.0
 configargparse
 ipython
