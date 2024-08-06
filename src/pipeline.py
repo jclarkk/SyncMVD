@@ -29,6 +29,8 @@ from diffusers.utils import (
 	replace_example_docstring
 	)
 
+import trimesh
+
 from diffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from diffusers.pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 from diffusers.models.attention_processor import Attention, AttentionProcessor
@@ -340,6 +342,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		logging_config=None,
 		cond_type="depth",
+		export_glb: bool = True,
 	):
 		
 
@@ -773,5 +776,19 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		self.uvp.to("cpu")
 		self.uvp_rgb.to("cpu")
+
+		# Add GLB export option
+		if export_glb:
+			# Convert the texture to the format expected by trimesh (0-255 uint8)
+			texture_image = (result_tex_rgb.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+
+			# Load the OBJ file using trimesh
+			mesh = trimesh.load(f"{self.result_dir}/textured.obj", process=False)
+
+			# Assign the texture to the mesh
+			mesh.visual.texture = trimesh.visual.TextureVisuals(image=texture_image)
+
+			# Export as GLB
+			mesh.export(f"{self.result_dir}/textured.glb")
 
 		return result_tex_rgb, textured_views, v

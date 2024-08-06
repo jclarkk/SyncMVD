@@ -1,5 +1,5 @@
 import torch
-from diffusers.utils import randn_tensor
+from diffusers.utils.torch_utils import randn_tensor
 
 '''
 
