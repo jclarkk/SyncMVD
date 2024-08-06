@@ -91,6 +91,9 @@ def get_rgb_texture(vae, uvp_rgb, latents, refine=False):
             result_views = resize(refined_views / 2 + 0.5).clamp(0, 1).unbind(0)
         else:
             result_views = (refined_views / 2 + 0.5).clamp(0, 1).unbind(0)
+    else:
+        resize = Resize((uvp_rgb.render_size,)*2, interpolation=InterpolationMode.NEAREST_EXACT, antialias=True)
+        result_views = resize(result_views / 2 + 0.5).clamp(0, 1).unbind(0)
 
     # Bake texture
     textured_views_rgb, result_tex_rgb, visibility_weights = uvp_rgb.bake_texture(views=result_views, main_views=[],
