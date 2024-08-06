@@ -758,7 +758,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		
 		self.uvp.to(self._execution_device)
 		self.uvp_rgb.to(self._execution_device)
-		result_tex_rgb, result_tex_rgb_output = get_rgb_texture(self.vae, self.uvp_rgb, latents)
+		result_tex_rgb, result_tex_rgb_output = get_rgb_texture(self.vae, self.uvp_rgb, latents, refine=True)
 		self.uvp.save_mesh(f"{self.result_dir}/textured.obj", result_tex_rgb.permute(1,2,0))
 
 

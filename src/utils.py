@@ -53,41 +53,44 @@ def latent_preview(x):
 
 
 # Decode each view and bake them into a rgb texture
-def get_rgb_texture(vae, uvp_rgb, latents):
+def get_rgb_texture(vae, uvp_rgb, latents, refine=False):
     # Decode latents to images
     result_views = vae.decode(latents / vae.config.scaling_factor, return_dict=False)[0]
 
-    # Use SDXL Refiner
-    refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
-        "stabilityai/stable-diffusion-xl-refiner-1.0",
-        torch_dtype=torch.float16,
-        variant="fp16",
-        use_safetensors=True
-    )
-    refiner.to("cuda")
+    if refine is True:
+        # Use SDXL Refiner
+        refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+            "stabilityai/stable-diffusion-xl-refiner-1.0",
+            torch_dtype=torch.float16,
+            variant="fp16",
+            use_safetensors=True
+        )
+        refiner.to("cuda")
 
-    refined_views = []
-    for view in result_views:
-        view_pil = transforms.ToPILImage()(view / 2 + 0.5)
+        refiner.set_progress_bar_config(disable=True)
 
-        refined_view = refiner(
-            prompt="high quality, detailed image, photorealistic",
-            image=view_pil,
-            num_inference_steps=30,
-            strength=0.3,
-            guidance_scale=7.5
-        ).images[0]
+        refined_views = []
+        for view in result_views:
+            view_pil = transforms.ToPILImage()(view / 2 + 0.5)
 
-        refined_view = transforms.ToTensor()(refined_view) * 2 - 1
-        refined_views.append(refined_view)
+            refined_view = refiner(
+                prompt="high quality, detailed image, photorealistic",
+                image=view_pil,
+                num_inference_steps=30,
+                strength=0.3,
+                guidance_scale=7.5
+            ).images[0]
 
-    refined_views = torch.stack(refined_views).to(latents.device)
+            refined_view = transforms.ToTensor()(refined_view) * 2 - 1
+            refined_views.append(refined_view)
 
-    if refined_views.shape[-2:] != (uvp_rgb.render_size, uvp_rgb.render_size):
-        resize = Resize((uvp_rgb.render_size,) * 2, interpolation=InterpolationMode.BICUBIC, antialias=True)
-        result_views = resize(refined_views / 2 + 0.5).clamp(0, 1).unbind(0)
-    else:
-        result_views = (refined_views / 2 + 0.5).clamp(0, 1).unbind(0)
+        refined_views = torch.stack(refined_views).to(latents.device)
+
+        if refined_views.shape[-2:] != (uvp_rgb.render_size, uvp_rgb.render_size):
+            resize = Resize((uvp_rgb.render_size,) * 2, interpolation=InterpolationMode.BICUBIC, antialias=True)
+            result_views = resize(refined_views / 2 + 0.5).clamp(0, 1).unbind(0)
+        else:
+            result_views = (refined_views / 2 + 0.5).clamp(0, 1).unbind(0)
 
     # Bake texture
     textured_views_rgb, result_tex_rgb, visibility_weights = uvp_rgb.bake_texture(views=result_views, main_views=[],
