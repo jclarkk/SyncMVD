@@ -300,7 +300,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		prompt: str = None,
 		height: Optional[int] = None,
 		width: Optional[int] = None,
-		num_inference_steps: int = 50,
+		num_inference_steps: int = 25,
 		guidance_scale: float = 7.5,
 		negative_prompt: str = None,
 		

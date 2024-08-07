@@ -1,7 +1,10 @@
 import torch
+from PIL import Image
+from aura_sr import AuraSR
 from diffusers import StableDiffusionXLImg2ImgPipeline
 from torchvision import transforms
 from torchvision.transforms import Resize, InterpolationMode
+from tqdm import tqdm
 
 '''
 	Encoding and decoding functions similar to diffusers library implementation
@@ -57,7 +60,7 @@ def get_rgb_texture(vae, uvp_rgb, latents, refine=False):
     # Decode latents to images
     result_views = vae.decode(latents / vae.config.scaling_factor, return_dict=False)[0]
 
-    if refine is True:
+    if refine:
         # Use SDXL Refiner
         refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
             "stabilityai/stable-diffusion-xl-refiner-1.0",
@@ -66,33 +69,47 @@ def get_rgb_texture(vae, uvp_rgb, latents, refine=False):
             use_safetensors=True
         )
         refiner.to("cuda")
-
+        refiner.enable_attention_slicing()
         refiner.set_progress_bar_config(disable=True)
 
-        refined_views = []
-        for view in result_views:
+        aura_sr = AuraSR.from_pretrained()
+
+        refined_upscaled_views = []
+        for view in tqdm(result_views, desc="Refining and upscaling views"):
             view_pil = transforms.ToPILImage()(view / 2 + 0.5)
 
             refined_view = refiner(
-                prompt="high quality, detailed image, photorealistic, bright, clear details, sharp",
+                prompt="high quality, detailed image",
                 image=view_pil,
-                num_inference_steps=30,
+                num_inference_steps=15,
                 strength=0.3,
                 guidance_scale=7.5
             ).images[0]
 
-            refined_view = transforms.ToTensor()(refined_view) * 2 - 1
-            refined_views.append(refined_view)
+            refined_view_512 = refined_view.resize((512, 512), Image.LANCZOS)
 
-        refined_views = torch.stack(refined_views).to(latents.device)
+            # Upscale using aura-sr
+            upscaled_view = aura_sr.upscale_4x(refined_view_512)
 
-        if refined_views.shape[-2:] != (uvp_rgb.render_size, uvp_rgb.render_size):
-            resize = Resize((uvp_rgb.render_size,) * 2, interpolation=InterpolationMode.BICUBIC, antialias=True)
-            result_views = resize(refined_views / 2 + 0.5).clamp(0, 1).unbind(0)
-        else:
-            result_views = (refined_views / 2 + 0.5).clamp(0, 1).unbind(0)
+            # Resize to exactly 2048x2048 if it's not already
+            if upscaled_view.size != (2048, 2048):
+                upscaled_view = upscaled_view.resize((2048, 2048), Image.LANCZOS)
+
+            # Convert back to tensor and normalize
+            refined_upscaled_view = transforms.ToTensor()(upscaled_view) * 2 - 1
+            refined_upscaled_views.append(refined_upscaled_view)
+
+            # Clear GPU cache after each iteration
+            torch.cuda.empty_cache()
+
+        # Stack refined and upscaled views
+        refined_upscaled_views = torch.stack(refined_upscaled_views).to(latents.device)
+
+        # Resize to original render size for baking
+        resize = Resize((uvp_rgb.render_size,)*2, interpolation=InterpolationMode.BICUBIC, antialias=True)
+        result_views = resize(refined_upscaled_views / 2 + 0.5).clamp(0, 1).unbind(0)
     else:
-        resize = Resize((uvp_rgb.render_size,)*2, interpolation=InterpolationMode.NEAREST_EXACT, antialias=True)
+        resize = Resize((uvp_rgb.render_size,) * 2, interpolation=InterpolationMode.NEAREST_EXACT, antialias=True)
         result_views = resize(result_views / 2 + 0.5).clamp(0, 1).unbind(0)
 
     # Bake texture
