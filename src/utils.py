@@ -74,7 +74,7 @@ def get_rgb_texture(vae, uvp_rgb, latents, refine=False):
             view_pil = transforms.ToPILImage()(view / 2 + 0.5)
 
             refined_view = refiner(
-                prompt="high quality, detailed image, photorealistic",
+                prompt="high quality, detailed image, photorealistic, bright, clear details, sharp",
                 image=view_pil,
                 num_inference_steps=30,
                 strength=0.3,
