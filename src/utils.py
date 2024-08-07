@@ -56,61 +56,12 @@ def latent_preview(x):
 
 
 # Decode each view and bake them into a rgb texture
-def get_rgb_texture(vae, uvp_rgb, latents, refine=False):
+def get_rgb_texture(vae, uvp_rgb, latents):
     # Decode latents to images
     result_views = vae.decode(latents / vae.config.scaling_factor, return_dict=False)[0]
 
-    if refine:
-        # Use SDXL Refiner
-        refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-xl-refiner-1.0",
-            torch_dtype=torch.float16,
-            variant="fp16",
-            use_safetensors=True
-        )
-        refiner.to("cuda")
-        refiner.enable_attention_slicing()
-        refiner.set_progress_bar_config(disable=True)
-
-        aura_sr = AuraSR.from_pretrained()
-
-        refined_upscaled_views = []
-        for view in tqdm(result_views, desc="Refining and upscaling views"):
-            view_pil = transforms.ToPILImage()(view / 2 + 0.5)
-
-            refined_view = refiner(
-                prompt="high quality, detailed image",
-                image=view_pil,
-                num_inference_steps=15,
-                strength=0.3,
-                guidance_scale=7.5
-            ).images[0]
-
-            refined_view_512 = refined_view.resize((512, 512), Image.LANCZOS)
-
-            # Upscale using aura-sr
-            upscaled_view = aura_sr.upscale_4x(refined_view_512)
-
-            # Resize to exactly 2048x2048 if it's not already
-            if upscaled_view.size != (2048, 2048):
-                upscaled_view = upscaled_view.resize((2048, 2048), Image.LANCZOS)
-
-            # Convert back to tensor and normalize
-            refined_upscaled_view = transforms.ToTensor()(upscaled_view) * 2 - 1
-            refined_upscaled_views.append(refined_upscaled_view)
-
-            # Clear GPU cache after each iteration
-            torch.cuda.empty_cache()
-
-        # Stack refined and upscaled views
-        refined_upscaled_views = torch.stack(refined_upscaled_views).to(latents.device)
-
-        # Resize to original render size for baking
-        resize = Resize((uvp_rgb.render_size,)*2, interpolation=InterpolationMode.BICUBIC, antialias=True)
-        result_views = resize(refined_upscaled_views / 2 + 0.5).clamp(0, 1).unbind(0)
-    else:
-        resize = Resize((uvp_rgb.render_size,) * 2, interpolation=InterpolationMode.NEAREST_EXACT, antialias=True)
-        result_views = resize(result_views / 2 + 0.5).clamp(0, 1).unbind(0)
+    resize = Resize((uvp_rgb.render_size,) * 2, interpolation=InterpolationMode.NEAREST_EXACT, antialias=True)
+    result_views = resize(result_views / 2 + 0.5).clamp(0, 1).unbind(0)
 
     # Bake texture
     textured_views_rgb, result_tex_rgb, visibility_weights = uvp_rgb.bake_texture(views=result_views, main_views=[],
